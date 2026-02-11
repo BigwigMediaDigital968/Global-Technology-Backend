@@ -6,6 +6,7 @@ const sendEmail = require("../utils/sendEmail");
 ======================= */
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
+const Newsletter = require("../models/newsletter.model");
 
 /* =======================
    CREATE LEAD + SEND OTP
@@ -96,43 +97,64 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
+    // ✅ Mark lead verified
     lead.isVerified = true;
     lead.otp = undefined;
     lead.otpExpiresAt = undefined;
     await lead.save();
 
-    // 📩 Confirmation to user
+    /* ===============================
+       ADD TO NEWSLETTER AUTOMATICALLY
+    =============================== */
+
+    const existingSubscriber = await Newsletter.findOne({ email });
+
+    if (!existingSubscriber) {
+      await Newsletter.create({
+        email: lead.email,
+        source: "lead-verification",
+        status: "active",
+      });
+    } else {
+      existingSubscriber.status = "active";
+      await existingSubscriber.save();
+    }
+
+    /* ===============================
+       SEND CONFIRMATION EMAIL
+    =============================== */
+
     await sendEmail({
       to: lead.email,
       subject: "Thank You for Contacting Global Technologies",
       html: `
         <p>Hello ${lead.name},</p>
-        <p>We have received your query.</p>
-        <p>Our team will contact you shortly.</p>
+        <p>Your email has been verified successfully.</p>
+        <p>You are now subscribed to our latest updates & news.</p>
         <br/>
         <p>Regards,<br/>Global Technologies</p>
       `,
     });
 
-    // 📩 Notify admin
     await sendEmail({
       to: process.env.ADMIN_EMAIL || "anuragkumarmait@gmail.com",
-      subject: "Lead Verified",
+      subject: "Lead Verified & Added to Newsletter",
       html: `
-        <p><b>${lead.name}</b> has verified their OTP.</p>
+        <p><b>${lead.name}</b> verified OTP.</p>
         <p>Email: ${lead.email}</p>
-        <p>Phone: ${lead.phone}</p>
+        <p>Status: Added to Newsletter (Active)</p>
       `,
     });
 
     res.status(200).json({
       success: true,
-      message: "OTP verified successfully",
+      message: "OTP verified & added to newsletter",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 /* =======================

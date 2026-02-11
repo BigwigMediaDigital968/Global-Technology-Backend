@@ -10,6 +10,10 @@ const app =express();
 app.use(express.json());
 app.use(cors());
 
+const newsletterRoute = require("./routes/newsletter.route");
+
+app.use("/api/newsletter", newsletterRoute);
+
 
 app.use("/api/lead",leadroute);
 
