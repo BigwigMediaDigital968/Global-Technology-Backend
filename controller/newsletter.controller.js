@@ -46,19 +46,17 @@ exports.subscribeNewsletter = async (req, res) => {
       success: true,
       message: "Subscribed successfully",
     });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 /* ==============================
    SEND NEWSLETTER (ADMIN)
 ============================== */
 exports.sendNewsletter = async (req, res) => {
   try {
-    const { subject, content } = req.body;
+    const { subject, content, emails } = req.body;
 
     if (!subject || !content) {
       return res.status(400).json({
@@ -66,7 +64,16 @@ exports.sendNewsletter = async (req, res) => {
       });
     }
 
-    const subscribers = await Newsletter.find({ status: "active" });
+    let subscribers;
+
+    if (emails && emails.length > 0) {
+      subscribers = await Newsletter.find({
+        email: { $in: emails },
+        status: "active",
+      });
+    } else {
+      subscribers = await Newsletter.find({ status: "active" });
+    }
 
     if (subscribers.length === 0) {
       return res.status(200).json({
@@ -81,15 +88,31 @@ exports.sendNewsletter = async (req, res) => {
           to: user.email,
           subject,
           html: content,
-        })
-      )
+        }),
+      ),
     );
 
     res.status(200).json({
       success: true,
       message: `Newsletter sent to ${subscribers.length} users`,
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
+/* ==============================
+   GET ALL SUBSCRIBERS (ADMIN)
+============================== */
+exports.getSubscribers = async (req, res) => {
+  try {
+    const subscribers = await Newsletter.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: subscribers.length,
+      data: subscribers,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

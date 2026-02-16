@@ -1,4 +1,3 @@
-
 const mongoose = require("mongoose");
 
 const LeadSchema = new mongoose.Schema(
@@ -12,7 +11,7 @@ const LeadSchema = new mongoose.Schema(
     otpExpiresAt: { type: Date },
     isVerified: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-module.exports= mongoose.model("Lead", LeadSchema);
+module.exports = mongoose.model("Lead", LeadSchema);
