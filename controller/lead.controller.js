@@ -11,6 +11,66 @@ const Newsletter = require("../models/newsletter.model");
 /* =======================
    CREATE LEAD + SEND OTP
 ======================= */
+// exports.createLead = async (req, res) => {
+//   try {
+//     const { name, email, phone, message } = req.body;
+
+//     if (!name || !email || !phone || !message) {
+//       return res.status(400).json({ message: "All fields are required" });
+//     }
+
+//     // Check existing email
+//     const existingLead = await Lead.findOne({ email });
+//     if (existingLead) {
+//       return res.status(409).json({ message: "Email already exists" });
+//     }
+
+//     const otp = generateOTP();
+
+//     const lead = await Lead.create({
+//       name,
+//       email,
+//       phone,
+//       message,
+//       otp,
+//       otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+//     });
+
+//     // 📩 Send OTP to user
+//     await sendEmail({
+//       to: email,
+//       subject: "OTP Verification - Global Technologies",
+//       html: `
+//         <p>Hello ${name},</p>
+//         <p>Your OTP is:</p>
+//         <h2>${otp}</h2>
+//         <p>Valid for 5 minutes.</p>
+//       `,
+//     });
+
+//     // 📩 Send lead details to admin (even if not verified)
+//     await sendEmail({
+//       to: "anuragkumarmait@gmail.com",
+//       subject: "New Lead Received - Global Technologies",
+//       html: `
+//         <h3>New Lead</h3>
+//         <p><b>Name:</b> ${name}</p>
+//         <p><b>Email:</b> ${email}</p>
+//         <p><b>Phone:</b> ${phone}</p>
+//         <p><b>Message:</b> ${message}</p>
+//         <p><b>Verified:</b> ❌</p>
+//       `,
+//     });
+
+//     res.status(201).json({
+//       success: true,
+//       leadId: lead._id,
+//       message: "Lead created & OTP sent",
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 exports.createLead = async (req, res) => {
   try {
     const { name, email, phone, message } = req.body;
@@ -19,24 +79,60 @@ exports.createLead = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // Check existing email
-    const existingLead = await Lead.findOne({ email });
-    if (existingLead) {
-      return res.status(409).json({ message: "Email already exists" });
-    }
+    let lead = await Lead.findOne({ email });
 
     const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
-    const lead = await Lead.create({
+    /* ==================================
+       CASE 1: Lead Exists
+    ================================== */
+    if (lead) {
+      // If already verified → stop
+      if (lead.isVerified) {
+        return res.status(400).json({
+          message: "Email already verified. Please proceed.",
+        });
+      }
+
+      // If not verified → resend OTP (NO error message)
+      lead.name = name; // update details (optional)
+      lead.phone = phone;
+      lead.message = message;
+      lead.otp = otp;
+      lead.otpExpiresAt = otpExpiry;
+
+      await lead.save();
+
+      await sendEmail({
+        to: email,
+        subject: "OTP Verification - Global Technologies",
+        html: `
+          <p>Hello ${name},</p>
+          <p>Your new OTP is:</p>
+          <h2>${otp}</h2>
+          <p>Valid for 5 minutes.</p>
+        `,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "OTP sent successfully",
+      });
+    }
+
+    /* ==================================
+       CASE 2: New Lead
+    ================================== */
+    lead = await Lead.create({
       name,
       email,
       phone,
       message,
       otp,
-      otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      otpExpiresAt: otpExpiry,
     });
 
-    // 📩 Send OTP to user
     await sendEmail({
       to: email,
       subject: "OTP Verification - Global Technologies",
@@ -48,9 +144,8 @@ exports.createLead = async (req, res) => {
       `,
     });
 
-    // 📩 Send lead details to admin (even if not verified)
     await sendEmail({
-      to: "anuragkumarmait@gmail.com",
+      to: process.env.ADMIN_EMAIL || "anuragkumarmait@gmail.com",
       subject: "New Lead Received - Global Technologies",
       html: `
         <h3>New Lead</h3>
@@ -62,10 +157,9 @@ exports.createLead = async (req, res) => {
       `,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      leadId: lead._id,
-      message: "Lead created & OTP sent",
+      message: "OTP sent successfully",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -155,8 +249,6 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-
-
 /* =======================
    GET ALL LEADS
 ======================= */
@@ -174,11 +266,10 @@ exports.getAllLeads = async (req, res) => {
 ======================= */
 exports.updateLead = async (req, res) => {
   try {
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
