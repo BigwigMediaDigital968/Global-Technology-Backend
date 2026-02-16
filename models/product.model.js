@@ -10,7 +10,7 @@ const ProductSchema = new mongoose.Schema(
 
     price: { type: Number },
 
-    collection: {
+    collectionName: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Collection",
       required: true,
