@@ -1,18 +1,10 @@
 const SibApiV3Sdk = require("sib-api-v3-sdk");
 require("dotenv").config();
 
-// Initialize Brevo client
 const client = SibApiV3Sdk.ApiClient.instance;
 client.authentications["api-key"].apiKey = process.env.BREVO_API_KEY;
 
-/**
- * sendEmail function
- * @param {Object} param
- * @param {string} param.to - Recipient email
- * @param {string} param.subject - Email subject
- * @param {string} param.html - HTML content
- */
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, attachments = [] }) => {
   try {
     const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
@@ -22,16 +14,23 @@ const sendEmail = async ({ to, subject, html }) => {
         email: "support@bigwigmediadigital.com",
       },
       to: [{ email: to }],
-      subject: subject,
+      subject,
       htmlContent: html,
     };
 
+    if (attachments.length > 0) {
+      sendSmtpEmail.attachment = attachments.map((file) => ({
+        name: file.name,
+        content: file.content,
+      }));
+    }
+
     await apiInstance.sendTransacEmail(sendSmtpEmail);
 
-    console.log(`✅ Email sent to ${to} successfully via Brevo`);
+    console.log(`✅ Email sent to ${to}`);
   } catch (error) {
-    console.error(`❌ Failed to send email to ${to} via Brevo:`, error.response?.body || error);
+    console.error("Brevo Error:", error.response?.body || error);
   }
 };
 
-module.exports = sendEmail;
+module.exports = sendEmail; // ✅ VERY IMPORTANT

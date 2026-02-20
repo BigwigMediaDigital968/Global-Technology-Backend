@@ -1,4 +1,5 @@
 const express = require("express");
+const upload = require("../middleware/upload");
 const {
   subscribeNewsletter,
   sendNewsletter,
@@ -8,7 +9,9 @@ const {
 const router = express.Router();
 
 router.post("/subscribe", subscribeNewsletter);
-router.post("/send", sendNewsletter);
+
+// 👇 Accept attachment
+router.post("/send", upload.array("attachments", 10), sendNewsletter);
 
 router.get("/all", getSubscribers);
 

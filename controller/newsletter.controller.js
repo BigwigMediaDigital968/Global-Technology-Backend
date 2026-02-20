@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const Newsletter = require("../models/newsletter.model");
 const sendEmail = require("../utils/sendEmail");
 
@@ -56,7 +58,7 @@ exports.subscribeNewsletter = async (req, res) => {
 ============================== */
 exports.sendNewsletter = async (req, res) => {
   try {
-    const { subject, content, emails } = req.body;
+    const { subject, content } = req.body;
 
     if (!subject || !content) {
       return res.status(400).json({
@@ -64,15 +66,23 @@ exports.sendNewsletter = async (req, res) => {
       });
     }
 
+    let emails = [];
+
+    if (req.body.emails) {
+      emails = JSON.parse(req.body.emails);
+    }
+
     let subscribers;
 
-    if (emails && emails.length > 0) {
+    if (emails.length > 0) {
       subscribers = await Newsletter.find({
         email: { $in: emails },
         status: "active",
       });
     } else {
-      subscribers = await Newsletter.find({ status: "active" });
+      subscribers = await Newsletter.find({
+        status: "active",
+      });
     }
 
     if (subscribers.length === 0) {
@@ -82,21 +92,45 @@ exports.sendNewsletter = async (req, res) => {
       });
     }
 
+    /* ================= Handle Attachments ================= */
+    let attachments = [];
+
+    if (req.files && req.files.length > 0) {
+      attachments = req.files.map((file) => {
+        const fileContent = fs.readFileSync(file.path);
+
+        return {
+          name: file.originalname,
+          content: fileContent.toString("base64"),
+        };
+      });
+    }
+
+    /* ================= Send Emails ================= */
     await Promise.all(
       subscribers.map((user) =>
         sendEmail({
           to: user.email,
           subject,
           html: content,
+          attachments, // ✅ correct
         }),
       ),
     );
+
+    /* ================= Cleanup Files ================= */
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        fs.unlinkSync(file.path);
+      });
+    }
 
     res.status(200).json({
       success: true,
       message: `Newsletter sent to ${subscribers.length} users`,
     });
   } catch (error) {
+    console.error("Newsletter Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
