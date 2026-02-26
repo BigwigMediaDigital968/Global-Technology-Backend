@@ -1,69 +1,177 @@
+const slugify = require("slugify");
 const Collection = require("../models/collection.model");
 const Product = require("../models/product.model");
 
-// ADMIN – Create Collection
+/* ---------------------------------------------------
+   ADMIN – CREATE COLLECTION
+--------------------------------------------------- */
 exports.createCollection = async (req, res) => {
   try {
-    const { name, slug, description, image } = req.body;
+    const { name, slug, description, status = "active" } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Collection name is required",
+      });
+    }
+
+    /* -------------------------------
+       Slug handling
+    -------------------------------- */
+    const finalSlug = slug
+      ? slugify(slug, { lower: true, strict: true })
+      : slugify(name, { lower: true, strict: true });
+
+    const slugExists = await Collection.findOne({ slug: finalSlug });
+    if (slugExists) {
+      return res.status(409).json({
+        success: false,
+        message: "Slug already exists",
+      });
+    }
+
+    /* -------------------------------
+       Image (Cloudinary)
+    -------------------------------- */
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Collection banner image is required",
+      });
+    }
+
+    const image = req.file.path; // Cloudinary URL
 
     const collection = await Collection.create({
       name,
-      slug,
+      slug: finalSlug,
       description,
       image,
+      status,
     });
 
-    res.status(201).json(collection);
+    res.status(201).json({
+      success: true,
+      data: collection,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
-// Get Collection
+/* ---------------------------------------------------
+   ADMIN – GET ALL COLLECTIONS
+--------------------------------------------------- */
 exports.getAllCollections = async (req, res) => {
   try {
-    const collections = await Collection.find().populate("products");
+    const collections = await Collection.find()
+      .populate("products")
+      .sort({ createdAt: -1 });
 
-    res.json(collections);
+    res.json({
+      success: true,
+      data: collections,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// Update collection
+/* ---------------------------------------------------
+   ADMIN – UPDATE COLLECTION
+--------------------------------------------------- */
 exports.updateCollection = async (req, res) => {
   try {
-    const updated = await Collection.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true },
-    ).populate("products");
+    const { slug } = req.body;
+    const collection = await Collection.findById(req.params.id);
 
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// Delete Collection
-exports.deleteCollection = async (req, res) => {
-  try {
-    const collection = await Collection.findByIdAndDelete(req.params.id);
-
-    if (collection) {
-      await Product.updateMany(
-        { collection: collection._id },
-        { $unset: { collection: "" } },
-      );
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
     }
 
-    res.json({ message: "Deleted successfully" });
+    /* -------------------------------
+       Slug update
+    -------------------------------- */
+    if (slug && slug !== collection.slug) {
+      const finalSlug = slugify(slug, { lower: true, strict: true });
+
+      const exists = await Collection.findOne({
+        slug: finalSlug,
+        _id: { $ne: collection._id },
+      });
+
+      if (exists) {
+        return res.status(409).json({
+          success: false,
+          message: "Slug already exists",
+        });
+      }
+
+      collection.slug = finalSlug;
+    }
+
+    /* -------------------------------
+       Image update (optional)
+    -------------------------------- */
+    if (req.file) {
+      collection.image = req.file.path; // Cloudinary URL
+    }
+
+    Object.assign(collection, req.body);
+    await collection.save();
+
+    res.json({
+      success: true,
+      data: collection,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// WEBSITE – Active Collections Only
+/* ---------------------------------------------------
+   ADMIN – DELETE COLLECTION
+--------------------------------------------------- */
+exports.deleteCollection = async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
+    }
+
+    /* -------------------------------
+       Remove collection reference
+    -------------------------------- */
+    await Product.updateMany(
+      { collection: collection._id },
+      { $unset: { collection: "" } }
+    );
+
+    await collection.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Collection deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/* ---------------------------------------------------
+   WEBSITE – ACTIVE COLLECTIONS
+--------------------------------------------------- */
 exports.getActiveCollections = async (req, res) => {
   try {
     const collections = await Collection.find({ status: "active" }).populate({
@@ -71,8 +179,11 @@ exports.getActiveCollections = async (req, res) => {
       match: { status: "active" },
     });
 
-    res.json(collections);
+    res.json({
+      success: true,
+      data: collections,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };

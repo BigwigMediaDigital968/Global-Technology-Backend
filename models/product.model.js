@@ -1,16 +1,47 @@
 const mongoose = require("mongoose");
+const slugify = require("slugify");
+
+const FAQSchema = new mongoose.Schema(
+  {
+    question: { type: String, required: true },
+    answer: { type: String, required: true },
+  },
+  { _id: false }
+);
 
 const ProductSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true },
-    description: { type: String },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    images: [{ type: String }], // multiple images
+    slug: {
+      type: String,
+      unique: true,
+      index: true,
+    },
 
-    price: { type: Number },
+    description: String,
 
-    collectionName: {
+    images: [String],
+
+    sizes: [String],
+
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    extraDetails: {
+      type: Map,
+      of: String,
+    },
+
+    faqs: [FAQSchema],
+
+    collection: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Collection",
       required: true,
@@ -22,7 +53,24 @@ const ProductSchema = new mongoose.Schema(
       default: "active",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
+/* 🔥 Smart Slug Generator */
+ProductSchema.pre("save", async function (next) {
+  if (!this.slug) {
+    let baseSlug = slugify(this.name, { lower: true, strict: true });
+    let slug = baseSlug;
+    let count = 1;
+
+    while (await mongoose.models.Product.findOne({ slug })) {
+      slug = `${baseSlug}-${count++}`;
+    }
+
+    this.slug = slug;
+  }
+
+  next();
+});
 
 module.exports = mongoose.model("Product", ProductSchema);
