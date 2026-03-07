@@ -7,26 +7,23 @@ const upload = require("../middleware/upload");
    ADMIN ROUTES
 ================================================= */
 
-// Create product
-router.post("/admin/add", upload.array("images", 10), productController.createProduct);
+// Create
+router.post("/admin", upload.array("images", 10), productController.createProduct);
 
-// Get all products (admin)
-router.get("/admin/get", productController.getAllProducts);
+// Get all
+router.get("/admin", productController.getAllProducts);
 
-// Get single product (by ID)
-router.get("/admin/get/:id", productController.getSingleProduct);
+// Get one
+router.get("/admin/:id", productController.getSingleProduct);
 
-// Update product
-router.put("/admin/update/:id", upload.array("images", 10), productController.updateProduct);
+// Update
+router.put("/admin/:id", upload.array("images", 10), productController.updateProduct);
 
-// Delete product
+// Delete
 router.delete("/admin/:id", productController.deleteProduct);
 
-// Change product status (active / inactive)
-router.patch(
-  "/admin/:id/status",
-  productController.changeProductStatus,
-);
+// Change status
+router.patch("/admin/:id/status", productController.changeProductStatus);
 
 /* =================================================
    WEBSITE ROUTES

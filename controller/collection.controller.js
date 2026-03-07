@@ -82,6 +82,41 @@ exports.getAllCollections = async (req, res) => {
 };
 
 /* ---------------------------------------------------
+   GET SINGLE COLLECTION (BY ID OR SLUG)
+--------------------------------------------------- */
+exports.getSingleCollection = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let collection;
+
+    // check if Mongo ObjectId
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      collection = await Collection.findById(id).populate("products");
+    } else {
+      collection = await Collection.findOne({ slug: id }).populate("products");
+    }
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: collection,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/* ---------------------------------------------------
    ADMIN – UPDATE COLLECTION
 --------------------------------------------------- */
 exports.updateCollection = async (req, res) => {

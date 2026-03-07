@@ -9,6 +9,20 @@ const FAQSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const SizeSchema = new mongoose.Schema(
+  {
+    size: {
+      type: String,
+      required: true,
+    },
+    price: {
+      type: Number,
+      required: true,
+    },
+  },
+  { _id: false }
+);
+
 const ProductSchema = new mongoose.Schema(
   {
     name: {
@@ -27,7 +41,7 @@ const ProductSchema = new mongoose.Schema(
 
     images: [String],
 
-    sizes: [String],
+    sizes: [SizeSchema],
 
     price: {
       type: Number,
@@ -41,7 +55,7 @@ const ProductSchema = new mongoose.Schema(
 
     faqs: [FAQSchema],
 
-    collection: {
+    collectionName: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Collection",
       required: true,

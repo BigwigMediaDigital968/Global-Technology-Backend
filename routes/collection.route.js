@@ -4,8 +4,9 @@ const collectionController = require("../controller/collection.controller");
 const upload = require("../middleware/upload");
 
 // Admin
-router.post("/", upload.single("image"), collectionController.createCollection);
+router.post("/admin", upload.single("image"), collectionController.createCollection);
 router.get("/admin", collectionController.getAllCollections);
+router.get("/admin/:id", collectionController.getSingleCollection);
 router.put(
   "/admin/:id",
   upload.single("image"),
@@ -15,5 +16,6 @@ router.delete("/admin/:id", collectionController.deleteCollection);
 
 // Website
 router.get("/", collectionController.getActiveCollections);
+router.get("/:slug", collectionController.getSingleCollection); 
 
 module.exports = router;
