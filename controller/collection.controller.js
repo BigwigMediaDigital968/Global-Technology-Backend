@@ -7,7 +7,13 @@ const Product = require("../models/product.model");
 --------------------------------------------------- */
 exports.createCollection = async (req, res) => {
   try {
-    const { name, slug, description, status = "active" } = req.body;
+    const {
+      name,
+      slug,
+      description,
+      status = "active",
+      products = [],
+    } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -24,6 +30,7 @@ exports.createCollection = async (req, res) => {
       : slugify(name, { lower: true, strict: true });
 
     const slugExists = await Collection.findOne({ slug: finalSlug });
+
     if (slugExists) {
       return res.status(409).json({
         success: false,
@@ -41,19 +48,48 @@ exports.createCollection = async (req, res) => {
       });
     }
 
-    const image = req.file.path; // Cloudinary URL
+    const image = req.file.path;
 
+    /* -------------------------------
+       Parse product IDs
+    -------------------------------- */
+    let productIds = [];
+
+    if (typeof products === "string") {
+      productIds = [products];
+    } else if (Array.isArray(products)) {
+      productIds = products;
+    }
+
+    /* -------------------------------
+       Create collection
+    -------------------------------- */
     const collection = await Collection.create({
       name,
       slug: finalSlug,
       description,
       image,
       status,
+      products: productIds,
     });
+
+    /* -------------------------------
+       Sync products → collection
+    -------------------------------- */
+    if (productIds.length > 0) {
+      await Product.updateMany(
+        { _id: { $in: productIds } },
+        { $set: { collectionName: collection._id } },
+      );
+    }
+
+    const populated = await Collection.findById(collection._id).populate(
+      "products",
+    );
 
     res.status(201).json({
       success: true,
-      data: collection,
+      data: populated,
     });
   } catch (err) {
     res.status(500).json({
@@ -190,7 +226,7 @@ exports.deleteCollection = async (req, res) => {
     -------------------------------- */
     await Product.updateMany(
       { collection: collection._id },
-      { $unset: { collection: "" } }
+      { $unset: { collection: "" } },
     );
 
     await collection.deleteOne();

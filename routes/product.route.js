@@ -8,7 +8,11 @@ const upload = require("../middleware/upload");
 ================================================= */
 
 // Create
-router.post("/admin", upload.array("images", 10), productController.createProduct);
+router.post(
+  "/admin",
+  upload.array("images", 10),
+  productController.createProduct,
+);
 
 // Get all
 router.get("/admin", productController.getAllProducts);
@@ -17,10 +21,15 @@ router.get("/admin", productController.getAllProducts);
 router.get("/admin/:id", productController.getSingleProduct);
 
 // Update
-router.put("/admin/:id", upload.array("images", 10), productController.updateProduct);
+router.put(
+  "/admin/:id",
+  upload.array("images", 10),
+  productController.updateProduct,
+);
 
 // Delete
 router.delete("/admin/:id", productController.deleteProduct);
+router.delete("/admin", productController.bulkDeleteProducts);
 
 // Change status
 router.patch("/admin/:id/status", productController.changeProductStatus);

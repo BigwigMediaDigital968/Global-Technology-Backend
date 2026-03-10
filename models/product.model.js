@@ -6,7 +6,7 @@ const FAQSchema = new mongoose.Schema(
     question: { type: String, required: true },
     answer: { type: String, required: true },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const SizeSchema = new mongoose.Schema(
@@ -20,7 +20,7 @@ const SizeSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const ProductSchema = new mongoose.Schema(
@@ -45,7 +45,7 @@ const ProductSchema = new mongoose.Schema(
 
     price: {
       type: Number,
-      required: true,
+      // required: true,
     },
 
     extraDetails: {
@@ -67,11 +67,11 @@ const ProductSchema = new mongoose.Schema(
       default: "active",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-/* 🔥 Smart Slug Generator */
-ProductSchema.pre("save", async function (next) {
+// ✅ FIXED - don't use next with async, just return the promise
+ProductSchema.pre("save", async function () {
   if (!this.slug) {
     let baseSlug = slugify(this.name, { lower: true, strict: true });
     let slug = baseSlug;
@@ -83,8 +83,7 @@ ProductSchema.pre("save", async function (next) {
 
     this.slug = slug;
   }
-
-  next();
+  // No next() call needed - Mongoose awaits the returned promise
 });
 
 module.exports = mongoose.model("Product", ProductSchema);
