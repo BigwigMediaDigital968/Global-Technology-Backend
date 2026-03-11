@@ -5,12 +5,14 @@ const {
   getAllLeads,
   updateLead,
   deleteLead,
+  createLeadWithoutOTP,
 } = require("../controller/lead.controller");
 
 const router = express.Router();
 
 // Create lead + send OTP
 router.post("/create-lead", createLead);
+router.post("/create", createLeadWithoutOTP);
 
 // Verify OTP
 router.post("/verify-lead", verifyOtp);
