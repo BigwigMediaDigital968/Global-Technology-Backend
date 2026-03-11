@@ -241,6 +241,60 @@ exports.deleteCollection = async (req, res) => {
 };
 
 /* ---------------------------------------------------
+   WEBSITE – GET SINGLE ACTIVE COLLECTION (BY ID OR SLUG)
+--------------------------------------------------- */
+exports.getSingleActiveCollection = async (req, res) => {
+  try {
+    const { identifier } = req.params;
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: "Collection ID or slug is required",
+      });
+    }
+
+    let collection;
+
+    // Check if it's a MongoDB ObjectId
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      collection = await Collection.findOne({
+        _id: identifier,
+        status: "active",
+      }).populate({
+        path: "products",
+        match: { status: "active" },
+      });
+    } else {
+      collection = await Collection.findOne({
+        slug: identifier,
+        status: "active",
+      }).populate({
+        path: "products",
+        match: { status: "active" },
+      });
+    }
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: collection,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/* ---------------------------------------------------
    WEBSITE – ACTIVE COLLECTIONS
 --------------------------------------------------- */
 exports.getActiveCollections = async (req, res) => {
