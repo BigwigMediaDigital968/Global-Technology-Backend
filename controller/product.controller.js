@@ -133,13 +133,40 @@ exports.getAllProducts = async (req, res) => {
 /* ---------------------------------------------------
    GET SINGLE PRODUCT
 --------------------------------------------------- */
+// exports.getSingleProduct = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const product = await Product.findOne({
+//       $or: [{ _id: id }, { slug: id }],
+//     }).populate("collectionName");
+
+//     if (!product) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Product not found",
+//       });
+//     }
+
+//     res.json({ success: true, data: product });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
+
 exports.getSingleProduct = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id || req.params.slug;
 
-    const product = await Product.findOne({
-      $or: [{ _id: id }, { slug: id }],
-    }).populate("collectionName");
+    console.log("getSingleProduct called with id:", id); // ← add this
+
+    const mongoose = require("mongoose");
+
+    const isObjectId = mongoose.Types.ObjectId.isValid(id);
+
+    const product = await Product.findOne(
+      isObjectId ? { $or: [{ _id: id }, { slug: id }] } : { slug: id },
+    ).populate("collectionName");
 
     if (!product) {
       return res.status(404).json({
