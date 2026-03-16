@@ -9,20 +9,6 @@ const FAQSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const SizeSchema = new mongoose.Schema(
-  {
-    size: {
-      type: String,
-      required: true,
-    },
-    price: {
-      type: Number,
-      required: true,
-    },
-  },
-  { _id: false },
-);
-
 const ProductSchema = new mongoose.Schema(
   {
     name: {
@@ -37,15 +23,23 @@ const ProductSchema = new mongoose.Schema(
       index: true,
     },
 
-    description: String,
+    // NEW FIELD
+    shortDescription: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    // NEW FIELD
+    longDescription: {
+      type: String,
+    },
 
     images: [String],
 
-    sizes: [SizeSchema],
-
-    price: {
-      type: Number,
-      // required: true,
+    // File upload (catalogue / datasheet)
+    file: {
+      type: String,
     },
 
     extraDetails: {
@@ -70,7 +64,7 @@ const ProductSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ✅ FIXED - don't use next with async, just return the promise
+// Auto generate unique slug
 ProductSchema.pre("save", async function () {
   if (!this.slug) {
     let baseSlug = slugify(this.name, { lower: true, strict: true });
@@ -83,7 +77,6 @@ ProductSchema.pre("save", async function () {
 
     this.slug = slug;
   }
-  // No next() call needed - Mongoose awaits the returned promise
 });
 
 module.exports = mongoose.model("Product", ProductSchema);

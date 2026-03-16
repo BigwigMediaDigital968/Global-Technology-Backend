@@ -1,16 +1,10 @@
 const Lead = require("../models/leadmodel");
 const sendEmail = require("../utils/sendEmail");
 
-/* =======================
-   Helper: Generate OTP
-======================= */
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 const Newsletter = require("../models/newsletter.model");
 
-/* =======================
-   CREATE LEAD + SEND OTP
-======================= */
 exports.createLead = async (req, res) => {
   try {
     const { name, email, phone, message } = req.body;
@@ -106,9 +100,6 @@ exports.createLead = async (req, res) => {
   }
 };
 
-/* =======================
-   VERIFY OTP
-======================= */
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -189,9 +180,6 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-/* =======================
-   GET ALL LEADS
-======================= */
 exports.getAllLeads = async (req, res) => {
   try {
     const leads = await Lead.find().sort({ createdAt: -1 });
@@ -201,9 +189,6 @@ exports.getAllLeads = async (req, res) => {
   }
 };
 
-/* =======================
-   UPDATE LEAD
-======================= */
 exports.updateLead = async (req, res) => {
   try {
     const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, {
@@ -221,9 +206,6 @@ exports.updateLead = async (req, res) => {
   }
 };
 
-/* =======================
-   DELETE LEAD
-======================= */
 exports.deleteLead = async (req, res) => {
   try {
     const lead = await Lead.findByIdAndDelete(req.params.id);
@@ -238,7 +220,6 @@ exports.deleteLead = async (req, res) => {
   }
 };
 
-// create lead without OTP
 exports.createLeadWithoutOTP = async (req, res) => {
   try {
     const { name, email, phone, message } = req.body;

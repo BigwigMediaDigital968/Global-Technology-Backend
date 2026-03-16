@@ -3,45 +3,43 @@ const router = express.Router();
 const productController = require("../controller/product.controller.js");
 const upload = require("../middleware/upload");
 
-/* =================================================
-   ADMIN ROUTES
-================================================= */
-
-// Create
+// Create product
 router.post(
   "/admin",
-  upload.array("images", 10),
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "file", maxCount: 1 },
+  ]),
   productController.createProduct,
 );
 
-// Get all
+// Get all products (admin)
 router.get("/admin", productController.getAllProducts);
 
-// Get one
+// Get one product (admin & website)
 router.get("/admin/:id", productController.getSingleProduct);
 
-// Update
+// Update product
 router.put(
   "/admin/:id",
-  upload.array("images", 10),
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "file", maxCount: 1 },
+  ]),
   productController.updateProduct,
 );
 
-// Delete
+// Delete product(s)
 router.delete("/admin/:id", productController.deleteProduct);
 router.delete("/admin", productController.bulkDeleteProducts);
 
-// Change status
+// Change status (active/inactive)
 router.patch("/admin/:id/status", productController.changeProductStatus);
 
-/* =================================================
-   WEBSITE ROUTES
-================================================= */
-
-// Get all active products
+// Get all active products for website
 router.get("/", productController.getActiveProducts);
 
-// Get single product by slug (SEO)
+// Get single product by slug (SEO) or ID (fallback)
 router.get("/:slug", productController.getSingleProduct);
 
 module.exports = router;

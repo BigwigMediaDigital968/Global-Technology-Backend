@@ -7,7 +7,8 @@ exports.createProduct = async (req, res) => {
     const {
       name,
       slug,
-      description,
+      shortDescription,
+      longDescription,
       collectionName,
       status = "active",
     } = req.body;
@@ -18,22 +19,6 @@ exports.createProduct = async (req, res) => {
         message: "Name and collection are required",
       });
     }
-
-    /* ── SIZES (already parsed by multer) ── */
-    const rawSizes = req.body.sizes || [];
-    const sizes = (Array.isArray(rawSizes) ? rawSizes : [rawSizes])
-      .filter((s) => s.size && s.price)
-      .map((s) => ({ size: String(s.size), price: Number(s.price) }));
-
-    if (!sizes.length) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one size with price is required",
-      });
-    }
-
-    /* ── PRICE ── */
-    const price = Math.min(...sizes.map((s) => s.price));
 
     /* ── FAQS (already parsed by multer) ── */
     const rawFaqs = req.body.faqs || [];
@@ -59,17 +44,18 @@ exports.createProduct = async (req, res) => {
         .json({ success: false, message: "Slug already exists" });
     }
 
-    /* ── IMAGES ── */
-    const images = req.files?.map((file) => file.path || file.filename) || [];
+    // Handle images and file uploads
+    const images = req.files?.images ? req.files.images.map((f) => f.path) : [];
+    const file = req.files?.file?.[0]?.path || null;
 
     /* ── CREATE ── */
     const product = await Product.create({
       name,
       slug: finalSlug,
-      description,
+      shortDescription,
+      longDescription,
       images,
-      sizes,
-      price,
+      file,
       extraDetails,
       faqs,
       collectionName,
@@ -99,9 +85,6 @@ exports.createProduct = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   GET ALL PRODUCTS WITH PAGINATION
---------------------------------------------------- */
 exports.getAllProducts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -130,30 +113,6 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   GET SINGLE PRODUCT
---------------------------------------------------- */
-// exports.getSingleProduct = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const product = await Product.findOne({
-//       $or: [{ _id: id }, { slug: id }],
-//     }).populate("collectionName");
-
-//     if (!product) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Product not found",
-//       });
-//     }
-
-//     res.json({ success: true, data: product });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
 exports.getSingleProduct = async (req, res) => {
   try {
     const id = req.params.id || req.params.slug;
@@ -181,9 +140,6 @@ exports.getSingleProduct = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   UPDATE PRODUCT
---------------------------------------------------- */
 exports.updateProduct = async (req, res) => {
   try {
     const { slug, collectionName } = req.body;
@@ -225,17 +181,6 @@ exports.updateProduct = async (req, res) => {
       product.collectionName = collectionName;
     }
 
-    /* -- SIZES + PRICE (multer already parses these) -- */
-    const rawSizes = req.body.sizes || [];
-    const sizes = (Array.isArray(rawSizes) ? rawSizes : [rawSizes])
-      .filter((s) => s.size && s.price)
-      .map((s) => ({ size: String(s.size), price: Number(s.price) }));
-
-    if (sizes.length) {
-      product.sizes = sizes;
-      product.price = Math.min(...sizes.map((s) => s.price));
-    }
-
     /* -- FAQS (was never being updated before!) -- */
     const rawFaqs = req.body.faqs || [];
     const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
@@ -255,14 +200,23 @@ exports.updateProduct = async (req, res) => {
     }
 
     /* -- IMAGES -- */
-    if (req.files?.length) {
-      const newImages = req.files.map((file) => file.path);
+    if (req.files?.images) {
+      const newImages = req.files.images.map((file) => file.path);
       product.images = [...product.images, ...newImages];
+    }
+
+    /* -- FILE -- */
+    if (req.files?.file) {
+      product.file = req.files.file[0].path;
     }
 
     /* -- BASIC FIELDS -- */
     product.name = req.body.name || product.name;
-    product.description = req.body.description || product.description;
+    product.shortDescription =
+      req.body.shortDescription || product.shortDescription;
+
+    product.longDescription =
+      req.body.longDescription || product.longDescription;
     product.status = req.body.status || product.status;
 
     await product.save();
@@ -278,9 +232,6 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   DELETE PRODUCT
---------------------------------------------------- */
 exports.deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
@@ -305,9 +256,6 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   CHANGE STATUS
---------------------------------------------------- */
 exports.changeProductStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -331,9 +279,6 @@ exports.changeProductStatus = async (req, res) => {
   }
 };
 
-/* ---------------------------------------------------
-   GET ACTIVE PRODUCTS
---------------------------------------------------- */
 exports.getActiveProducts = async (req, res) => {
   try {
     const products = await Product.find({ status: "active" })
@@ -346,7 +291,6 @@ exports.getActiveProducts = async (req, res) => {
   }
 };
 
-// Bulk product delete
 exports.bulkDeleteProducts = async (req, res) => {
   try {
     const { ids } = req.body;
