@@ -13,24 +13,52 @@ exports.createProduct = async (req, res) => {
       status = "active",
     } = req.body;
 
-    if (!name || !collectionName) {
+    if (!name || !collectionName || !shortDescription) {
       return res.status(400).json({
         success: false,
-        message: "Name and collection are required",
+        message: "Name, shortDescription and collection are required",
       });
     }
 
     /* ── FAQS (already parsed by multer) ── */
-    const rawFaqs = req.body.faqs || [];
-    const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
-      .filter((f) => f.question && f.answer)
-      .map((f) => ({ question: f.question, answer: f.answer }));
+    // const rawFaqs = req.body.faqs || [];
+    // const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
+    //   .filter((f) => f.question && f.answer)
+    //   .map((f) => ({ question: f.question, answer: f.answer }));
 
     /* ── EXTRA DETAILS ── */
-    const rawExtra = req.body.extraDetails || {};
-    const extraDetails = new Map(
-      Object.entries(rawExtra).filter(([key, value]) => key && value),
-    );
+    // const rawExtra = req.body.extraDetails || {};
+    // const extraDetails = new Map(
+    //   Object.entries(rawExtra).filter(([key, value]) => key && value),
+    // );
+
+    let faqs = [];
+    let extraDetails = new Map();
+
+    try {
+      const parsedFaqs = JSON.parse(req.body.faqs || "[]");
+
+      faqs = parsedFaqs
+        .filter((f) => f.question && f.answer)
+        .map((f) => ({
+          question: String(f.question),
+          answer: String(f.answer),
+        }));
+    } catch (e) {
+      console.error("FAQ parse error:", e);
+    }
+
+    try {
+      const parsedExtra = JSON.parse(req.body.extraDetails || "[]");
+
+      extraDetails = new Map(
+        parsedExtra
+          .filter((d) => d.key && d.value)
+          .map((d) => [d.key, d.value]),
+      );
+    } catch (e) {
+      console.error("ExtraDetails parse error:", e);
+    }
 
     /* ── SLUG ── */
     let finalSlug = slug
@@ -182,21 +210,56 @@ exports.updateProduct = async (req, res) => {
     }
 
     /* -- FAQS (was never being updated before!) -- */
-    const rawFaqs = req.body.faqs || [];
-    const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
-      .filter((f) => f.question && f.answer)
-      .map((f) => ({ question: String(f.question), answer: String(f.answer) }));
+    // const rawFaqs = req.body.faqs || [];
+    // const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
+    //   .filter((f) => f.question && f.answer)
+    //   .map((f) => ({ question: String(f.question), answer: String(f.answer) }));
 
-    if (faqs.length) {
-      product.faqs = faqs;
-    }
+    // if (faqs.length) {
+    //   product.faqs = faqs;
+    // }
 
     /* -- EXTRA DETAILS -- */
-    const rawExtra = req.body.extraDetails || {};
-    if (Object.keys(rawExtra).length) {
-      product.extraDetails = new Map(
-        Object.entries(rawExtra).filter(([k, v]) => k && v),
-      );
+    // const rawExtra = req.body.extraDetails || {};
+    // if (Object.keys(rawExtra).length) {
+    //   product.extraDetails = new Map(
+    //     Object.entries(rawExtra).filter(([k, v]) => k && v),
+    //   );
+    // }
+
+    /* -- FAQS (FIXED) -- */
+    if (req.body.faqs) {
+      try {
+        const parsedFaqs = JSON.parse(req.body.faqs);
+
+        const faqs = parsedFaqs
+          .filter((f) => f.question && f.answer)
+          .map((f) => ({
+            question: String(f.question),
+            answer: String(f.answer),
+          }));
+
+        product.faqs = faqs;
+      } catch (err) {
+        console.error("FAQ parse error:", err);
+      }
+    }
+
+    /* -- EXTRA DETAILS (FIXED) -- */
+    if (req.body.extraDetails) {
+      try {
+        const parsedExtra = JSON.parse(req.body.extraDetails);
+
+        const extraDetails = new Map(
+          parsedExtra
+            .filter((d) => d.key && d.value)
+            .map((d) => [d.key, d.value]),
+        );
+
+        product.extraDetails = extraDetails;
+      } catch (err) {
+        console.error("ExtraDetails parse error:", err);
+      }
     }
 
     /* -- IMAGES -- */
