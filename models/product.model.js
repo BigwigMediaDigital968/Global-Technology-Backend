@@ -55,6 +55,12 @@ const ProductSchema = new mongoose.Schema(
       required: true,
     },
 
+    category: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
+      default: [],
+      index: true,
+    },
+
     status: {
       type: String,
       enum: ["active", "inactive"],

@@ -9,6 +9,7 @@ const leadRoute = require("./routes/lead.route");
 const newsletterRoute = require("./routes/newsletter.route");
 const productRoutes = require("./routes/product.route");
 const collectionRoutes = require("./routes/collection.route");
+const categoryRoutes = require("./routes/categoryRoutes.js");
 const app = express();
 
 app.use(cors());
@@ -19,6 +20,7 @@ app.use("/api/lead", leadRoute);
 app.use("/api/newsletter", newsletterRoute);
 app.use("/api/products", productRoutes);
 app.use("/api/collections", collectionRoutes);
+app.use("/api/categories", categoryRoutes);
 
 app.listen(process.env.PORT, async () => {
   try {

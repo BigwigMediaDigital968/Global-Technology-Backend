@@ -1,7 +1,46 @@
+const mongoose = require("mongoose");
 const Product = require("../models/product.model");
 const Collection = require("../models/collection.model");
+const Category = require("../models/categoryModel");
 const slugify = require("slugify");
 
+async function resolveCategories({
+  categoryIds,
+  categoryNames,
+  collectionName,
+}) {
+  const resolved = new Set();
+
+  // 1. Direct IDs passed (already exist)
+  if (Array.isArray(categoryIds)) {
+    categoryIds.forEach((id) => resolved.add(id.toString()));
+  }
+
+  // 2. On-the-fly creation from names
+  if (Array.isArray(categoryNames) && categoryNames.length) {
+    await Promise.all(
+      categoryNames.map(async (name) => {
+        name = name.trim();
+        let cat = await Category.findOne({
+          name: new RegExp(`^${name}$`, "i"),
+          collectionName,
+        });
+        if (!cat) cat = await Category.create({ name, collectionName });
+
+        // Sync to collection
+        await Collection.findByIdAndUpdate(collectionName, {
+          $addToSet: { categories: cat._id },
+        });
+
+        resolved.add(cat._id.toString());
+      }),
+    );
+  }
+
+  return [...resolved];
+}
+
+// ── CREATE PRODUCT
 exports.createProduct = async (req, res) => {
   try {
     const {
@@ -20,63 +59,57 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    /* ── FAQS (already parsed by multer) ── */
-    // const rawFaqs = req.body.faqs || [];
-    // const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
-    //   .filter((f) => f.question && f.answer)
-    //   .map((f) => ({ question: f.question, answer: f.answer }));
+    // Parse category inputs — support both single value and array
+    const categoryIds = [req.body.categoryIds || req.body.category]
+      .flat()
+      .filter(Boolean);
 
-    /* ── EXTRA DETAILS ── */
-    // const rawExtra = req.body.extraDetails || {};
-    // const extraDetails = new Map(
-    //   Object.entries(rawExtra).filter(([key, value]) => key && value),
-    // );
+    const categoryNames = [req.body.categoryNames || req.body.categoryName]
+      .flat()
+      .filter(Boolean);
 
+    const resolvedCategories = await resolveCategories({
+      categoryIds,
+      categoryNames,
+      collectionName,
+    });
+
+    // FAQs
     let faqs = [];
-    let extraDetails = new Map();
-
     try {
-      const parsedFaqs = JSON.parse(req.body.faqs || "[]");
-
-      faqs = parsedFaqs
+      faqs = JSON.parse(req.body.faqs || "[]")
         .filter((f) => f.question && f.answer)
         .map((f) => ({
           question: String(f.question),
           answer: String(f.answer),
         }));
-    } catch (e) {
-      console.error("FAQ parse error:", e);
-    }
+    } catch (e) {}
 
+    // Extra details
+    let extraDetails = new Map();
     try {
       const parsedExtra = JSON.parse(req.body.extraDetails || "[]");
-
       extraDetails = new Map(
         parsedExtra
           .filter((d) => d.key && d.value)
           .map((d) => [d.key, d.value]),
       );
-    } catch (e) {
-      console.error("ExtraDetails parse error:", e);
-    }
+    } catch (e) {}
 
-    /* ── SLUG ── */
+    // Slug
     let finalSlug = slug
       ? slugify(slug, { lower: true, strict: true })
       : slugify(name, { lower: true, strict: true });
 
-    const slugExists = await Product.findOne({ slug: finalSlug });
-    if (slugExists) {
+    if (await Product.findOne({ slug: finalSlug })) {
       return res
         .status(409)
         .json({ success: false, message: "Slug already exists" });
     }
 
-    // Handle images and file uploads
     const images = req.files?.images ? req.files.images.map((f) => f.path) : [];
     const file = req.files?.file?.[0]?.path || null;
 
-    /* ── CREATE ── */
     const product = await Product.create({
       name,
       slug: finalSlug,
@@ -87,6 +120,7 @@ exports.createProduct = async (req, res) => {
       extraDetails,
       faqs,
       collectionName,
+      category: resolvedCategories, // ← now an array
       status,
     });
 
@@ -96,82 +130,14 @@ exports.createProduct = async (req, res) => {
 
     res.status(201).json({ success: true, data: product });
   } catch (err) {
-    console.error(
-      "FULL ERR:",
-      JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
-    ); // ADD THIS
-    console.error("ERROR NAME:", err.name);
-    console.error("ERROR MESSAGE:", err.message);
-    console.error("VALIDATION ERRORS:", JSON.stringify(err.errors, null, 2));
-    console.error("FULL STACK:", err.stack);
-
-    res.status(500).json({
-      success: false,
-      message: err.message,
-      errors: err.errors, // send this to frontend too
-    });
-  }
-};
-
-exports.getAllProducts = async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
-
-    const products = await Product.find()
-      .populate("collectionName")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Product.countDocuments();
-
-    res.json({
-      success: true,
-      data: products,
-      pagination: {
-        total,
-        page,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.getSingleProduct = async (req, res) => {
-  try {
-    const id = req.params.id || req.params.slug;
-
-    console.log("getSingleProduct called with id:", id); // ← add this
-
-    const mongoose = require("mongoose");
-
-    const isObjectId = mongoose.Types.ObjectId.isValid(id);
-
-    const product = await Product.findOne(
-      isObjectId ? { $or: [{ _id: id }, { slug: id }] } : { slug: id },
-    ).populate("collectionName");
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    res.json({ success: true, data: product });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
+// ── UPDATE PRODUCT
 exports.updateProduct = async (req, res) => {
   try {
     const { slug, collectionName } = req.body;
-
     const product = await Product.findById(req.params.id);
 
     if (!product) {
@@ -180,14 +146,12 @@ exports.updateProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    /* -- SLUG -- */
+    // Slug
     if (slug && slug !== product.slug) {
       const finalSlug = slugify(slug, { lower: true, strict: true });
-      const exists = await Product.findOne({
-        slug: finalSlug,
-        _id: { $ne: product._id },
-      });
-      if (exists) {
+      if (
+        await Product.findOne({ slug: finalSlug, _id: { $ne: product._id } })
+      ) {
         return res
           .status(409)
           .json({ success: false, message: "Slug already exists" });
@@ -195,7 +159,7 @@ exports.updateProduct = async (req, res) => {
       product.slug = finalSlug;
     }
 
-    /* -- COLLECTION -- */
+    // Collection switch
     if (
       collectionName &&
       collectionName.toString() !== product.collectionName.toString()
@@ -209,92 +173,179 @@ exports.updateProduct = async (req, res) => {
       product.collectionName = collectionName;
     }
 
-    /* -- FAQS (was never being updated before!) -- */
-    // const rawFaqs = req.body.faqs || [];
-    // const faqs = (Array.isArray(rawFaqs) ? rawFaqs : [rawFaqs])
-    //   .filter((f) => f.question && f.answer)
-    //   .map((f) => ({ question: String(f.question), answer: String(f.answer) }));
+    // Categories — support replace or append via req.body.categoryMode
+    // categoryMode: "replace" (default) | "append"
+    const targetCollection = collectionName || product.collectionName;
+    const categoryIds = [req.body.categoryIds || req.body.category]
+      .flat()
+      .filter(Boolean);
+    const categoryNames = [req.body.categoryNames || req.body.categoryName]
+      .flat()
+      .filter(Boolean);
 
-    // if (faqs.length) {
-    //   product.faqs = faqs;
-    // }
+    if (categoryIds.length || categoryNames.length) {
+      const resolved = await resolveCategories({
+        categoryIds,
+        categoryNames,
+        collectionName: targetCollection,
+      });
 
-    /* -- EXTRA DETAILS -- */
-    // const rawExtra = req.body.extraDetails || {};
-    // if (Object.keys(rawExtra).length) {
-    //   product.extraDetails = new Map(
-    //     Object.entries(rawExtra).filter(([k, v]) => k && v),
-    //   );
-    // }
+      if (req.body.categoryMode === "append") {
+        const existing = product.category.map((id) => id.toString());
+        const merged = [...new Set([...existing, ...resolved])];
+        product.category = merged;
+      } else {
+        product.category = resolved; // replace
+      }
+    }
 
-    /* -- FAQS (FIXED) -- */
+    // FAQs
     if (req.body.faqs) {
       try {
-        const parsedFaqs = JSON.parse(req.body.faqs);
-
-        const faqs = parsedFaqs
+        product.faqs = JSON.parse(req.body.faqs)
           .filter((f) => f.question && f.answer)
           .map((f) => ({
             question: String(f.question),
             answer: String(f.answer),
           }));
-
-        product.faqs = faqs;
-      } catch (err) {
-        console.error("FAQ parse error:", err);
-      }
+      } catch (e) {}
     }
 
-    /* -- EXTRA DETAILS (FIXED) -- */
+    // Extra details
     if (req.body.extraDetails) {
       try {
         const parsedExtra = JSON.parse(req.body.extraDetails);
-
-        const extraDetails = new Map(
+        product.extraDetails = new Map(
           parsedExtra
             .filter((d) => d.key && d.value)
             .map((d) => [d.key, d.value]),
         );
-
-        product.extraDetails = extraDetails;
-      } catch (err) {
-        console.error("ExtraDetails parse error:", err);
-      }
+      } catch (e) {}
     }
 
-    /* -- IMAGES -- */
+    // Images & file
     if (req.files?.images) {
-      const newImages = req.files.images.map((file) => file.path);
-      product.images = [...product.images, ...newImages];
+      product.images = [
+        ...product.images,
+        ...req.files.images.map((f) => f.path),
+      ];
     }
-
-    /* -- FILE -- */
     if (req.files?.file) {
       product.file = req.files.file[0].path;
     }
 
-    /* -- BASIC FIELDS -- */
     product.name = req.body.name || product.name;
     product.shortDescription =
       req.body.shortDescription || product.shortDescription;
-
     product.longDescription =
       req.body.longDescription || product.longDescription;
     product.status = req.body.status || product.status;
 
     await product.save();
 
-    const updated = await Product.findById(product._id).populate(
-      "collectionName",
-    );
+    const updated = await Product.findById(product._id)
+      .populate("collectionName")
+      .populate("category", "name slug");
 
     res.json({ success: true, data: updated });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+exports.getAllProducts = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+
+    // ── COLLECTION FILTER ──────────────────────────────────────
+    if (req.query.collection) {
+      const isObjectId = mongoose.Types.ObjectId.isValid(req.query.collection);
+      if (isObjectId) {
+        filter.collectionName = req.query.collection;
+      } else {
+        const col = await Collection.findOne({ slug: req.query.collection });
+        if (!col)
+          return res.json({
+            success: true,
+            data: [],
+            pagination: { total: 0, page, pages: 0 },
+          });
+        filter.collectionName = col._id;
+      }
+    }
+
+    // ── CATEGORY FILTER ────────────────────────────────────────
+    if (req.query.category) {
+      const isObjectId = mongoose.Types.ObjectId.isValid(req.query.category);
+      if (isObjectId) {
+        filter.category = req.query.category;
+      } else {
+        const cat = await Category.findOne({ slug: req.query.category });
+        if (!cat)
+          return res.json({
+            success: true,
+            data: [],
+            pagination: { total: 0, page, pages: 0 },
+          });
+        filter.category = cat._id;
+      }
+    }
+
+    // ── STATUS FILTER ──────────────────────────────────────────
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .populate("collectionName")
+        .populate("category", "name slug") // ← ADD
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Product.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      data: products,
+      pagination: { total, page, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET SINGLE PRODUCT (admin)
+exports.getSingleProduct = async (req, res) => {
+  try {
+    const id = req.params.id || req.params.slug;
+    const mongoose = require("mongoose");
+    const isObjectId = mongoose.Types.ObjectId.isValid(id);
+
+    const product = await Product.findOne(
+      isObjectId ? { $or: [{ _id: id }, { slug: id }] } : { slug: id },
+    )
+      .populate("collectionName")
+      .populate("category", "name slug"); // ← ADD
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    res.json({ success: true, data: product });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Delete Product
 exports.deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
@@ -319,6 +370,7 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
+// Change product Active Status
 exports.changeProductStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -344,8 +396,33 @@ exports.changeProductStatus = async (req, res) => {
 
 exports.getActiveProducts = async (req, res) => {
   try {
-    const products = await Product.find({ status: "active" })
-      .populate("collectionName")
+    const filter = { status: "active" };
+
+    // Filter by collection (slug or ObjectId)
+    if (req.query.collection) {
+      if (mongoose.Types.ObjectId.isValid(req.query.collection)) {
+        filter.collectionName = req.query.collection;
+      } else {
+        const col = await Collection.findOne({ slug: req.query.collection });
+        if (!col) return res.json({ success: true, data: [] });
+        filter.collectionName = col._id;
+      }
+    }
+
+    // Filter by category (slug or ObjectId)
+    if (req.query.category) {
+      if (mongoose.Types.ObjectId.isValid(req.query.category)) {
+        filter.category = { $in: [req.query.category] }; // ← $in because array field
+      } else {
+        const cat = await Category.findOne({ slug: req.query.category });
+        if (!cat) return res.json({ success: true, data: [] });
+        filter.category = { $in: [cat._id] };
+      }
+    }
+
+    const products = await Product.find(filter)
+      .populate("collectionName", "name slug")
+      .populate("category", "name slug")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: products });
@@ -371,5 +448,19 @@ exports.bulkDeleteProducts = async (req, res) => {
       success: false,
       message: err.message,
     });
+  }
+};
+
+exports.getCategoriesByCollection = async (req, res) => {
+  try {
+    const { collectionId } = req.params;
+    const categories = await Category.find({
+      collectionName: collectionId,
+      status: "active",
+    }).sort("name");
+
+    res.json({ success: true, data: categories });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
