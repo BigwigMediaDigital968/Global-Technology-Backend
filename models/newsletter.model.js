@@ -23,6 +23,15 @@ const NewsletterSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+
+    unsubscribedAt: {
+      type: Date,
+      default: null,
+    },
+    unsubscribeReason: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true },
 );

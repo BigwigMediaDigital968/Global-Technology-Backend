@@ -11,11 +11,15 @@ const sendEmail = async ({ to, subject, html, attachments = [] }) => {
     const sendSmtpEmail = {
       sender: {
         name: "Global Technologies",
-        email: "support@bigwigmediadigital.com",
+        email: "support@globaltechnologiesindia.com",
       },
       to: [{ email: to }],
       subject,
       htmlContent: html,
+      headers: {
+        "List-Unsubscribe": "<mailto:unsubscribe@globaltechnologiesindia.com>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     };
 
     if (attachments.length > 0) {
@@ -30,7 +34,11 @@ const sendEmail = async ({ to, subject, html, attachments = [] }) => {
     console.log(`✅ Email sent to ${to}`);
   } catch (error) {
     console.error("Brevo Error:", error.response?.body || error);
+    console.error(
+      "❌ Brevo Full Error:",
+      JSON.stringify(error.response?.body || error, null, 2),
+    );
   }
 };
 
-module.exports = sendEmail; // ✅ VERY IMPORTANT
+module.exports = sendEmail;
